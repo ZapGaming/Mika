@@ -1,14 +1,13 @@
 # ---- Base Image ----
-FROM python:3.11-slim-bullseye 
+# Using a specific patch version for Python is often crucial for compatibility on deployment platforms.
+# We are changing 'python:3.11-slim' to 'python:3.11.8-slim'.
+FROM python:3.11.8-slim 
 
 # ---- Set Working Directory ----
 WORKDIR /app
 
 # ---- Install Build Tools and Image Libraries ----
-# Add these lines to install necessary packages for compiling Python dependencies like Pillow.
-# RUN apt-get update installs the package lists.
-# RUN apt-get install -y build-essential ... installs compilers and libraries.
-# ... && rm -rf /var/lib/apt/lists/* cleans up the apt cache to reduce image size.
+# Ensure these are installed before pip packages to avoid 'subprocess-exited-with-error'.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     build-essential \
@@ -24,7 +23,7 @@ RUN apt-get update \
 COPY requirements.txt ./
 
 # ---- Install Dependencies ----
-# Now that build tools are installed, pip should be able to install Pillow and other packages without errors.
+# This command MUST come after the apt-get install lines.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Copy Application Code ----
