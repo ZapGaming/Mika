@@ -1,0 +1,34 @@
+# Virtual Environment
+# This ignores the Python virtual environment folder created by `venv`.
+venv/
+.venv/
+env/
+
+# Python cache files and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / Editor specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Operating System generated files
+.DS_Store
+Thumbs.db
+
+# Sensitive Credentials
+# Crucially, this ignores the .env file which holds your API keys.
+# You will configure these secrets directly in your hosting platform (Render/Railway).
+.env
+
+# Log files
+*.log
+
+# Build artifacts / temporary files
+build/
+dist/
+*.egg-info/
