@@ -428,7 +428,7 @@ async def embed_command(ctx, url: str):
     
     # Basic validation to ensure the input is a URL.
     if not url.startswith(('http://', 'https://'))
-        await ctx.send("🌸 Oops! That doesn't look like a valid web link, darling. Please provide a URL starting with http:// or https://')):
+        await ctx.send("🌸 Oops! That doesn't look like a valid web link, darling. Please provide a URL starting with http:// or https://")
         await ctx.send("🌸 Oops! That doesn't look like a valid web link, darling. Please provide a URL starting with http:// or https://. 😉")
         return
 
