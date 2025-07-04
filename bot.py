@@ -1,4 +1,5 @@
 # --- IMPORTS ---
+# Standard libraries
 import discord
 import google.generativeai as genai
 import os
@@ -12,58 +13,67 @@ import io
 import threading          
 from http.server import BaseHTTPRequestHandler, HTTPServer 
 import socketserver       
-import json               # Needed for handling JSON history file
+import json               
 
 # --- ENVIRONMENT VARIABLE LOADING & VALIDATION ---
+# Load environment variables from the .env file.
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
+# Validate that essential tokens are loaded. Raise an error if they are missing.
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN not found. Please set it in your .env file.")
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY not found. Please set it in your .env file.")
 
 # --- GEMINI AI CONFIGURATION ---
-# UPDATE: Using the newer 'gemini-2.5-flash-lite-preview-06-17' model.
+# Configure the Google Generative AI client with your API key.
 genai.configure(api_key=GOOGLE_API_KEY)
+# Specify the Gemini model to use. Using the latest recommended version.
 GEMINI_MODEL_NAME = 'gemini-2.5-flash-lite-preview-06-17' 
 model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
 # --- DISCORD BOT INITIALIZATION ---
+# Define the necessary intents for Mika's functionalities.
 intents = discord.Intents.default()
-intents.guilds = True            
-intents.messages = True          
-intents.message_content = True   # REQUIRED for reading message content.
+intents.guilds = True            # Required for accessing server information.
+intents.messages = True          # Required to receive message events.
+intents.message_content = True   # CRITICAL: Required for reading message content (for chat and link processing)!
+# Create a Discord client instance with the specified intents.
 client = discord.Client(intents=intents) 
 
 # --- THEMATIC CONFIGURATION FOR EMBEDS ---
+# Colors inspired by the "Celestial Reforge" theme, suggesting blended gradients and metallic accents.
 CHILLAX_EMBED_COLORS = {
-    "celestial_lavender": discord.Color(0xD8BFD8),  
-    "celestial_gold_wash": discord.Color(0xC7A87A), # Mika's chosen signature color
-    "imperial_gold": discord.Color(0xFFD700),       
-    "ambient_blue": discord.Color(0xADD8E6),        
-    "burnished_bronze": discord.Color(0xB8860B),    
-    "gemini_glow": discord.Color(0xAA78BE),         
+    "celestial_lavender": discord.Color(0xD8BFD8),  # Light Purple, serene and calming
+    "celestial_gold_wash": discord.Color(0xC7A87A), # Muted Sophisticated Gold, luxurious but refined
+    "imperial_gold": discord.Color(0xFFD700),       # Bright Pure Gold, for impactful highlights
+    "ambient_blue": discord.Color(0xADD8E6),        # Soft Sky Blue, for gentle ambiance
+    "burnished_bronze": discord.Color(0xB8860B),    # Rich Bronze, for depth and contrast
+    "gemini_glow": discord.Color(0xAA78BE),         # A richer purple/pink to hint at a blended glow
 }
+# Set Mika's signature embed color.
 SELECTED_EMBED_COLOR = CHILLAX_EMBED_COLORS["celestial_gold_wash"] 
 
 # --- AI CHAT HISTORY MANAGEMENT ---
+# A dictionary to store conversation history per channel for context.
 channel_chat_history = {}
-MAX_HISTORY_TURNS = 6 
-# --- PERSISTENT HISTORY: Define file path for saving history ---
+MAX_HISTORY_TURNS = 6 # Maximum recent turns (user message + model response) to keep in history.
+# Define the file path for saving and loading persistent chat history.
 HISTORY_FILE = "chat_history.json" 
 
 # --- HELPER FUNCTIONS ---
-# (All previously defined helper functions are included here for completeness.)
 
 def clean_message_content(message_content: str) -> str:
     """ Cleans message content by removing Mika's mentions/username for cleaner AI input. """
     if not message_content: return ""
     cleaned = message_content
+    # Safely remove mentions if client and user objects are available.
     if client and client.user:
         mention_id = f"<@{client.user.id}>"
         mention_name = f"@{client.user.name}"
+        # Remove all occurrences of bot mentions/username.
         cleaned = cleaned.replace(mention_id, "").replace(mention_name, "").strip()
     return cleaned
 
@@ -74,12 +84,16 @@ async def get_gemini_response(prompt_text: str, channel_id: int) -> str:
     Refined for more pleasant and quick interactions.
     """
     prompt_text_cleaned = clean_message_content(prompt_text)
-    if not prompt_text_cleaned: return "" 
+    if not prompt_text_cleaned: return "" # If cleaned message is empty, no response needed.
 
+    # Initialize history for this channel if it's Mika's first interaction there.
     if channel_id not in channel_chat_history:
         channel_chat_history[channel_id] = []
+    
     history_for_gemini = channel_chat_history[channel_id]
 
+    # --- MIKA'S CORE AI PERSONA INSTRUCTION ---
+    # This is critical for defining her unique character, tone, and behaviour.
     ai_persona_instruction = (
         "You ARE MIKA! Act as a cute, sassy anime girl with a friendly but confident attitude. "
         "Your inspiration comes from the 'Celestial Reforge' and 'Chillax' themes – think elegant, serene beauty, luxurious cosmic vibes, and calming technology. "
@@ -93,108 +107,134 @@ async def get_gemini_response(prompt_text: str, channel_id: int) -> str:
     )
 
     try:
+        # Start a chat session with Gemini, passing the conversation history for context.
         chat = model.start_chat(history=history_for_gemini)
+        
+        # Combine persona instructions with the user's cleaned message for Gemini's input.
         response = await chat.send_message_async(f"{ai_persona_instruction}\nUser: {prompt_text_cleaned}")
         ai_response_text = response.text
 
-        # Update History
+        # --- Update Chat History for Context ---
+        # Store both the user's message and Mika's response for future turns.
         history_for_gemini.append({'role': 'user', 'content': prompt_text_cleaned})
         history_for_gemini.append({'role': 'model', 'content': ai_response_text})
         
+        # Trim history if it exceeds the maximum turns to manage context and API tokens.
         if len(history_for_gemini) > MAX_HISTORY_TURNS * 2: 
             channel_chat_history[channel_id] = history_for_gemini[-MAX_HISTORY_TURNS * 2:]
 
         # --- Persistency: Save history after each response ---
-        # Call the save function asynchronously to avoid blocking.
+        # Call the save function asynchronously to avoid blocking the main loop.
         asyncio.create_task(save_chat_history(channel_chat_history))
         
         return ai_response_text
 
     except Exception as e:
         print(f"Error getting response from Gemini for channel {channel_id}: {e}")
+        # Return a persona-consistent error message.
         return "Oh dear! Mika's celestial processors encountered a tiny glitch trying to respond! 🌸 Hmph, please try asking me again! 💖"
 
 def get_image_dimensions(url: str) -> tuple[int, int] | None:
     """ Fetches image dimensions (width, height) from a URL for thumbnail optimization. """
     try:
-        headers = {'User-Agent': 'MikaBotImageFetcher/1.0'} 
+        headers = {'User-Agent': 'MikaBotImageFetcher/1.0'} # Bot-specific User-Agent
         response = requests.get(url, stream=True, timeout=5, headers=headers)
-        response.raise_for_status() 
+        response.raise_for_status() # Check for HTTP errors
+        
+        # Use Pillow to open the image from response content bytes.
         with Image.open(io.BytesIO(response.content)) as img:
-            return img.size 
+            return img.size # Return (width, height)
     except (requests.exceptions.RequestException, Image.UnidentifiedImageError, Exception) as e:
+        # Silently ignore errors; not getting dimensions is okay.
         return None
 
 def get_link_metadata(url: str) -> dict | None:
-    """ Fetches and processes metadata (title, description, thumbnail, domain) from a URL. """
-    parsed_url_base = urlparse(url) 
+    """
+    Fetches and processes metadata (title, description, thumbnail, domain) from a URL.
+    Optimizes for thematic richness, uses robust fallbacks, and filters by image dimensions.
+    """
+    parsed_url_base = urlparse(url) # Parse the URL for domain extraction.
+    
     try:
-        headers = {
+        headers = { # Mimic browser headers for better website compatibility.
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 MikaBot/1.0',
             'Accept-Language': 'en-US,en;q=0.9', 
         }
+        
         response = requests.get(url, timeout=10, headers=headers, allow_redirects=True)
-        response.raise_for_status() 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        response.raise_for_status() # Error check for bad HTTP status codes.
+        soup = BeautifulSoup(response.content, 'html.parser') # Parse HTML content.
 
-        title = "✨ Celestial Link Preview ✨" 
+        # --- Extract Title ---
+        # Prioritize meta tags (OG, Twitter) for rich previews, fallback to standard HTML <title>.
+        title = "✨ Celestial Link Preview ✨" # Default thematic title
         og_title = soup.find('meta', property='og:title')
         twitter_title = soup.find('meta', attrs={'name': 'twitter:title'})
         html_title = soup.find('title')
 
+        # Logic to find the best available title.
         if og_title and og_title.get('content'): title = og_title['content'].strip()
         elif twitter_title and twitter_title.get('content'): title = twitter_title['content'].strip()
         elif html_title and html_title.string: title = html_title.string.strip()
         
+        # If title is still generic or a default, try to extract from URL path for context.
         if not title or title == "✨ Celestial Link Preview ✨" or len(title) < 5:
             path_parts = parsed_url_base.path.split('/')
             if path_parts and path_parts[-1] and len(path_parts[-1]) > 2:
-                candidate_title = path_parts[-1].replace('-', ' ').replace('_', ' ')
-                if len(candidate_title) > 4 and len(candidate_title) < 60:
-                     title = candidate_title.title()
+                candidate_title = path_parts[-1].replace('-', ' ').replace('_', ' ') # Basic cleaning
+                if len(candidate_title) > 4 and len(candidate_title) < 60: # Ensure reasonable length
+                     title = candidate_title.title() # Apply Title Case.
 
-        description = "🌟 Mika's personal curation: a link glowing with cosmic insight! 💎" 
+        # --- Extract Description ---
+        # Provide thematic defaults or enrich generic descriptions with Mika's persona.
+        description = "🌟 Mika's personal curation: a link glowing with cosmic insight! 💎" # Thematic default
         og_description = soup.find('meta', property='og:description')
         twitter_description = soup.find('meta', attrs={'name': 'twitter:description'})
         meta_description = soup.find('meta', attrs={'name': 'description'})
 
-        scraped_desc = "" 
+        scraped_desc = "" # Placeholder for a substantial scraped description
         if og_description and og_description.get('content'): scraped_desc = og_description['content'].strip()
         elif twitter_description and twitter_description.get('content'): scraped_desc = twitter_description['content'].strip()
         elif meta_description and meta_description.get('content'): scraped_desc = meta_description['content'].strip()
         
+        # If scraped description is useful, format it nicely with Mika's touch.
         if scraped_desc and len(scraped_desc) > 50: 
-            description = f"💖 {scraped_desc[:300]}..." 
-        else: 
+            description = f"💖 {scraped_desc[:300]}..." # Make it personal, add emojis, truncate.
+        else: # Use a richer thematic filler if scraped content is too brief or generic.
             description = "✨ Glimmering with cosmic insight. A refined experience. Mika's touch ensures beauty and clarity. 💎"
              
+        # --- Extract Thumbnail URL ---
+        # Prioritize meta tags, then search general <img> tags with dimension checks for quality.
         thumbnail_url = None
         og_image = soup.find('meta', property='og:image')
         twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
 
-        image_candidates = [] 
+        image_candidates = [] # Store potential thumbnail URLs for evaluation.
         if og_image and og_image.get('content'): image_candidates.append(og_image['content'].strip())
         if twitter_image and twitter_image.get('content'): image_candidates.append(twitter_image['content'].strip())
         
-        if not image_candidates: 
+        if not image_candidates: # If no meta image, search <img> tags.
             img_tags = soup.find_all('img', src=True)
             for img in img_tags:
                 src = img.get('src')
+                # Basic validation: URL format, image extension, and minimal dimensions.
                 if src and src.startswith(('http', 'https')):
                     if any(src.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
-                        dims = get_image_dimensions(src)
-                        if dims and dims[0] > 80 and dims[1] > 80: 
+                        dims = get_image_dimensions(src) # Check image dimensions.
+                        if dims and dims[0] > 80 and dims[1] > 80: # Prefer larger images for thumbnails.
                             image_candidates.append(src)
 
+        # Process image candidates to get absolute URLs and select the best one.
         for candidate in image_candidates:
             processed_url = candidate
-            if not processed_url.startswith('http'): 
+            if not processed_url.startswith('http'): # Make relative URLs absolute.
                 processed_url = urljoin(url, processed_url)
             
+            # Final validation: URL string, starts with http, and valid image extension.
             if processed_url.startswith(('http://', 'https://')) and \
                any(processed_url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
                 thumbnail_url = processed_url
-                break
+                break # Found a suitable candidate, stop searching.
         
         if thumbnail_url and not (isinstance(thumbnail_url, str) and thumbnail_url.startswith(('http://', 'https://'))):
              thumbnail_url = None
@@ -204,7 +244,7 @@ def get_link_metadata(url: str) -> dict | None:
             'title': title,
             'description': description,
             'thumbnail_url': thumbnail_url,
-            'site_domain': parsed_url_base.netloc if parsed_url_base and parsed_url_base.netloc else None 
+            'site_domain': parsed_url_base.netloc if parsed_url_base and parsed_url_base.netloc else None # Store website domain.
         }
 
     except requests.exceptions.Timeout:
@@ -222,12 +262,15 @@ async def create_themed_embed(url_data: dict, message: discord.Message) -> disco
     Constructs a Discord embed with Mika's unique persona, thematic elements,
     emojis, and stylized text for maximum impact and appeal.
     """
+    # --- Embed Title ---
     title_emojis_left = "💖🌟" 
     title_emojis_right = "🔗 | ⭐"
     embed_title = f"{title_emojis_left} {url_data.get('title', 'No Title Found')} {title_emojis_right}"
 
+    # --- Embed Description ---
     embed_description = url_data.get('description', '🌟 A celestial link resource, curated by Mika! 💎')
     
+    # --- Conditional Thematic Padding ---
     if len(embed_description) < 100 or any(w in embed_description.lower() for w in ["celestial", "mika's touch", "curated", "link resource", "beauty", "clarity", "found something lovely"]):
         padding_top = "Hehe! ✨ Mika found something lovely for you! 💖"
         padding_bottom = "This is a little sparkle from the cosmos, just for you! 😉🌟"
@@ -244,16 +287,19 @@ async def create_themed_embed(url_data: dict, message: discord.Message) -> disco
         color=SELECTED_EMBED_COLOR 
     )
     
+    # --- Thumbnail Handling ---
     thumbnail_url = url_data.get('thumbnail_url')
     if thumbnail_url and isinstance(thumbnail_url, str) and thumbnail_url.startswith(('http://', 'https://')):
         embed.set_thumbnail(url=thumbnail_url)
     
+    # --- Thematic Embed Fields ---
     site_domain = url_data.get('site_domain')
     if site_domain:
         domain_field_name = "🌟 **Cosmic Origin**" 
         domain_field_value = f"`{site_domain}`"
         embed.add_field(name=domain_field_name, value=domain_field_value, inline=True)
 
+    # --- Thematic Footer ---
     footer_parts = [f"Shared by: {message.author.display_name}"] 
     if message.guild: 
         footer_parts.append(f"Channel: #{message.channel.name}") 
@@ -269,14 +315,13 @@ async def create_themed_embed(url_data: dict, message: discord.Message) -> disco
 
 def load_chat_history():
     """
-    Loads chat history from the JSON file. If the file doesn't exist or is invalid,
-    it initializes history as an empty dictionary.
+    Loads chat history from the JSON file. Initializes empty history if file not found or corrupted.
     """
     global channel_chat_history # Modifying the global variable
     try:
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
             loaded_data = json.load(f)
-            # Ensure the loaded data is in the expected dictionary format
+            # Ensure loaded data is a dictionary.
             if isinstance(loaded_data, dict):
                 channel_chat_history = loaded_data
                 print(f"Successfully loaded chat history from {HISTORY_FILE}")
@@ -296,11 +341,9 @@ def load_chat_history():
 async def save_chat_history(history_data: dict):
     """
     Asynchronously saves the current chat history to the JSON file.
-    Handles potential errors during file writing.
+    Handles potential errors during file writing using run_in_executor for non-blocking I/O.
     """
     try:
-        # Use asyncio's run_in_executor to run blocking I/O in a separate thread pool
-        # to avoid blocking the event loop.
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None, # Use the default executor (usually a ThreadPoolExecutor)
@@ -314,14 +357,13 @@ async def save_chat_history(history_data: dict):
 def _save_chat_history_sync(history_data: dict):
     """
     Synchronous helper function to save chat history to a JSON file.
-    This function is called by save_chat_history via run_in_executor.
+    Called by save_chat_history via run_in_executor.
     """
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            # Dump the history dictionary to the JSON file. indent=4 makes it human-readable.
+            # Dump history to JSON file with pretty printing and ensuring non-ASCII chars are saved correctly.
             json.dump(history_data, f, indent=4, ensure_ascii=False)
     except Exception as e:
-        # Catch any errors during the synchronous file writing process.
         print(f"Sync error saving chat history: {e}")
 
 # --- BOT EVENT: ON READY ---
@@ -331,7 +373,7 @@ async def on_ready():
     print('------')
     
     # --- Load Chat History on Bot Startup ---
-    load_chat_history() # Load history immediately after initialization.
+    load_chat_history() 
 
     # Set Mika's status to reflect her active, themed persona.
     await client.change_presence(activity=discord.Activity(
@@ -343,92 +385,7 @@ async def on_ready():
     # --- START THE HEALTH CHECK SERVER IN A SEPARATE THREAD ---
     # This is vital so it doesn't block the bot's asynchronous operations.
     try:
+        # Get the port Render will assign dynamically. Defaults to 8080 if not provided.
         render_port = int(os.environ.get('PORT', 8080)) 
         
-        # Create and start the server thread. daemon=True ensures it exits with the main program.
-        server_thread = threading.Thread(target=run_health_server, args=(render_port,), daemon=True)
-        server_thread.start()
-        print(f"Health check server thread initiated on port {render_port}.")
-
-    except Exception as e:
-        print(f"Error starting the health check server: {e}")
-
-
-# --- DUMMY HTTP SERVER HANDLER AND RUNNER FOR RENDER HEALTH CHECKS ---
-# This component runs in a separate thread to satisfy Render's requirement for a listening port.
-
-PORT = int(os.environ.get('PORT', 8080)) 
-
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    """A minimal HTTP request handler that serves a simple text response for health checks."""
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"Mika is online and processing messages!") # ASCII-safe health message
-
-def run_health_server(port: int):
-    """
-    Starts the HTTP server on a separate thread. It runs indefinitely,
-    listening for health check requests on the specified port.
-    Runs as a daemon thread, ensuring it exits with the main program.
-    """
-    server_address = ('0.0.0.0', port) 
-    httpd = HTTPServer(server_address, HealthCheckHandler)
-    print(f"Health check server is running on port {port}...")
-    httpd.serve_forever()
-
-# --- BOT EVENT: ON MESSAGE ---
-@client.event
-async def on_message(message: discord.Message):
-    if message.author == client.user: # Ignore messages from Mika herself.
-        return
-
-    # --- 1. PROCESS LINK PREVIEWS ---
-    potential_links = []
-    if message.content: 
-        words = message.content.split() 
-        for word in words:
-            if word.startswith(('http://', 'https://')):
-                try:
-                    parsed_url = urlparse(word)
-                    if parsed_url.scheme in ['http', 'https'] and parsed_url.netloc:
-                        potential_links.append(word)
-                except ValueError: continue 
-
-    if potential_links:
-        first_link_url = potential_links[0] 
-        print(f"Detected link from {message.author.display_name}: {first_link_url}")
-        
-        metadata = get_link_metadata(first_link_url)
-        
-        if metadata: 
-            themed_embed = await create_themed_embed(metadata, message)
-            try:
-                await message.channel.send(embed=themed_embed)
-            except discord.Forbidden:
-                print(f"Permission error: Mika cannot send embeds in {message.channel.name}.")
-            except discord.HTTPException as e:
-                print(f"HTTP error sending embed for {first_link_url}: {e}")
-        else:
-            print(f"Failed to fetch metadata for link: {first_link_url}.")
-    
-    # --- 2. PROCESS AI CHAT ---
-    is_mentioned = client.user.mentioned_in(message)
-    is_dm = message.guild is None 
-
-    if is_mentioned or is_dm: 
-        ai_prompt_content = message.content 
-        if not ai_prompt_content: return 
-            
-        print(f"Received AI query from {message.author.display_name} in '{message.channel.name if message.guild else 'DM'}': '{ai_prompt_content}'")
-
-        try:
-            bot_response = await get_gemini_response(ai_prompt_content, message.channel.id)
-
-            if bot_response:
-                for i in range(0, len(bot_response), 2000):
-                    await message.channel.send(bot_response[i:i+2000])
-        except discord.Forbidden:
-            print(f"Permission error: Mika cannot send messages in {message.channel.name}.")
-        except discord.HTT
+        # Create and start the server thread. daemon=True e
