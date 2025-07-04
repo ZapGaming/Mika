@@ -15,11 +15,12 @@ import socketserver       # For configuring the server socket
 
 # --- ENVIRONMENT VARIABLE LOADING & VALIDATION ---
 # Load variables from a .env file (ensure it's in the same directory!)
+# It should contain DISCORD_TOKEN and GOOGLE_API_KEY.
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-# Check if the essential tokens were loaded.
+# Check if the essential tokens were loaded successfully.
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN not found. Please set it in your .env file.")
 if not GOOGLE_API_KEY:
@@ -28,21 +29,21 @@ if not GOOGLE_API_KEY:
 # --- GEMINI AI CONFIGURATION ---
 # Configure the Google Generative AI client with your API key.
 genai.configure(api_key=GOOGLE_API_KEY)
-# Specify the Gemini model. 'gemini-1.5-flash-latest' is generally a good balance.
+# Specify the Gemini model to use. 'gemini-1.5-flash-latest' is a good balance of performance and cost.
 GEMINI_MODEL_NAME = 'gemini-1.5-flash-latest' 
 model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
 # --- DISCORD BOT INITIALIZATION ---
-# Define the necessary intents for the bot's functionalities.
+# Define the necessary intents for Mika's functionalities.
 intents = discord.Intents.default()
-intents.guilds = True            # Required for server information.
+intents.guilds = True            # Required for accessing server information.
 intents.messages = True          # Required to receive message events.
-intents.message_content = True   # CRITICAL: Required for reading message content (for chat/links)!
+intents.message_content = True   # CRITICAL: Required for reading message content (for chat and link processing)!
 # Create a Discord client instance with the specified intents.
 client = discord.Client(intents=intents) 
 
 # --- THEMATIC CONFIGURATION FOR EMBEDS ---
-# Colors inspired by the "Celestial Reforge" theme, representing blends and metallic accents.
+# These colors are chosen to suggest the "Celestial Reforge" theme, representing blended gradients and luxurious metallic accents.
 CHILLAX_EMBED_COLORS = {
     "celestial_lavender": discord.Color(0xD8BFD8),  # Light Purple, serene and calming
     "celestial_gold_wash": discord.Color(0xC7A87A), # Muted Sophisticated Gold, luxurious but refined
@@ -57,9 +58,10 @@ SELECTED_EMBED_COLOR = CHILLAX_EMBED_COLORS["celestial_gold_wash"]
 # --- AI CHAT HISTORY MANAGEMENT ---
 # A dictionary to store conversation history per channel, enabling context for the AI.
 channel_chat_history = {}
-MAX_HISTORY_TURNS = 6 # Maximum recent turns to keep in history for context.
+MAX_HISTORY_TURNS = 6 # Maximum recent turns to keep in history for context management.
 
 # --- HELPER FUNCTIONS ---
+# (All helper functions defined in previous turns are included here)
 
 def clean_message_content(message_content: str) -> str:
     """
@@ -71,7 +73,7 @@ def clean_message_content(message_content: str) -> str:
     if client and client.user:
         mention_id = f"<@{client.user.id}>"
         mention_name = f"@{client.user.name}"
-        # Remove all occurrences of Mika's mentions/username from the message.
+        # Remove all occurrences of bot mentions/username from the message.
         cleaned = cleaned.replace(mention_id, "").replace(mention_name, "").strip()
     return cleaned
 
@@ -81,7 +83,7 @@ async def get_gemini_response(prompt_text: str, channel_id: int) -> str:
     personality, theme integration, emotional nuance, and chat history.
     """
     prompt_text_cleaned = clean_message_content(prompt_text)
-    if not prompt_text_cleaned: return "" # If cleaned message is empty, no response needed.
+    if not prompt_text_cleaned: return "" # If cleaned message is empty, no response is needed.
 
     # Initialize history for this channel if it's Mika's first interaction there.
     if channel_id not in channel_chat_history:
@@ -90,7 +92,7 @@ async def get_gemini_response(prompt_text: str, channel_id: int) -> str:
     history_for_gemini = channel_chat_history[channel_id]
 
     # --- MIKA'S CORE AI PERSONA INSTRUCTION ---
-    # This is critical for defining her unique character:
+    # This is critical for defining her unique character, tone, and behaviour.
     ai_persona_instruction = (
         "You ARE MIKA! Act as a cute, sassy anime girl with a friendly but confident attitude. "
         "Your inspiration comes from the 'Celestial Reforge' and 'Chillax' themes – think elegant, serene beauty, luxurious cosmic vibes, and calming technology. "
@@ -133,7 +135,7 @@ def get_image_dimensions(url: str) -> tuple[int, int] | None:
         response = requests.get(url, stream=True, timeout=5, headers=headers)
         response.raise_for_status() # Check for HTTP errors
         
-        # Open image from response content bytes using Pillow.
+        # Use Pillow to open the image from response content bytes.
         with Image.open(io.BytesIO(response.content)) as img:
             return img.size # Return (width, height)
     except (requests.exceptions.RequestException, Image.UnidentifiedImageError, Exception) as e:
@@ -316,7 +318,7 @@ async def create_themed_embed(url_data: dict, message: discord.Message) -> disco
     
     return embed
 
-# --- Bot Event: On Ready ---
+# --- BOT EVENT: ON READY ---
 @client.event
 async def on_ready():
     print(f'Logged in as {client.user.name} (ID: {client.user.id})')
@@ -328,14 +330,14 @@ async def on_ready():
     ))
     print(f"{client.user.name} is ONLINE and ready to dazzle! ✨")
 
-    # --- Start the Health Check Server in a separate thread ---
-    # This is vital so it doesn't block the bot's asynchronous operations.
+    # --- START THE HEALTH CHECK SERVER IN A SEPARATE THREAD ---
+    # This is vital so it doesn't block the bot's asynchronous operations managed by client.run().
     try:
-        # Get the port Render will assign dynamically. Defaults to 8080 if not set.
-        # Render typically uses PORT=8080 for free web services.
+        # Get the port Render will assign dynamically. Defaults to 8080 if not provided by Render.
+        # Common ports for Render web services are 80 or 8080.
         render_port = int(os.environ.get('PORT', 8080)) 
         
-        # Create and start the server thread. daemon=True ensures it exits with the main program.
+        # Create and start the server thread. daemon=True ensures it exits when the main program exits.
         server_thread = threading.Thread(target=run_health_server, args=(render_port,), daemon=True)
         server_thread.start()
         print(f"Health check server thread initiated on port {render_port}.")
@@ -344,27 +346,19 @@ async def on_ready():
         print(f"Error starting the health check server: {e}")
 
 
-# --- Dummy HTTP Server Handler and Runner for Render Health Checks ---
-# This runs in a separate thread to satisfy Render's requirement for a listening port.
+# --- DUMMY HTTP SERVER HANDLER AND RUNNER FOR RENDER HEALTH CHECKS ---
+# This component runs in a separate thread to satisfy Render's requirement for a listening port,
+# enabling its health checks to pass.
 
 # Define the port to listen on. Render injects the PORT env variable.
-PORT = int(os.environ.get('PORT', 8080)) # Default to 8080 if PORT is not provided.
+PORT = int(os.environ.get('PORT', 8080)) # Default to 8080 if PORT is not provided by the environment.
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
-    """A minimal HTTP request handler that serves a simple text response."""
+    """A minimal HTTP request handler that serves a simple text response for health checks."""
     def do_GET(self):
         # Respond with HTTP 200 OK status code.
         self.send_response(200)
         # Set the content type to plain text.
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        # Write the response body, including Mika's signature message.
-        self.wfile.write(b"Mika is online and processing messages! 💖🌟") # Mika's personal touch!
-
-def run_health_server(port: int):
-    """
-    Starts the HTTP server on a separate thread. The server runs indefinitely,
-    listening for health check requests on the specified port.
-    Runs as a daemon thread, so it won't prevent the program from exiting.
-    """
-    # Set
+        # Write the response body. IMPORTANT: Removing emojis from 
