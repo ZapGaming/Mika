@@ -12,21 +12,7 @@ lxml==5.2.2                            # A fast HTML parser, especially on Linux
 Pillow==10.3.0                         # For image processing, relies on build-essential in Dockerfile.
 
 # --- SPOTIFY INTEGRATION ---
-spotipy==2.25.0                        # For interacting with the Spotify API
-
-# --- ESSENTIAL GOOGLE API & CORE DEPENDENCIES ---
-# These are crucial for google-generativeai and its ecosystem to function.
-# Pip should resolve these to compatible versions.
-google-api-core==2.25.1
-google-auth==2.30.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.0
-googleapis-common-protos==1.70.0
-# grpcio is critical and will handle its protobuf dependencies correctly.
-grpcio==1.65.1 
-grpcio-status==1.65.1
-# proto-plus is important for google libraries.
-proto-plus==1.26.1                     
+spotipy==2.25.0                        # For interacting with the Spotify API                     
 
 # --- NETWORK UTILITIES (often needed by discord.py & others) ---
 aiohttp==3.12.13                       
