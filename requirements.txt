@@ -21,7 +21,7 @@ google-api-core==2.25.1
 google-auth==2.30.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
-googleapis-common-protos==2.1.0
+googleapis-common-protos==1.70.0
 # grpcio is critical and will handle its protobuf dependencies correctly.
 grpcio==1.65.1 
 grpcio-status==1.65.1
