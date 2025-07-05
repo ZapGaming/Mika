@@ -30,7 +30,7 @@ google-api-python-client==2.175.0
 google-auth==2.40.0
 google-auth-httplib2==0.2.0
 google-generativeai==0.6.0 # Redundant with earlier but good to have here
-googleapis-common-protos==2.1.0
+googleapis-common-protos==1.70.0
 grpcio==1.65.1
 grpcio-status==1.65.1
 idna==3.7
