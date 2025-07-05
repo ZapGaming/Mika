@@ -41,7 +41,7 @@ proxy.py==2.4.8
 pyasn1==0.6.0
 pyasn1-modules==0.4.0
 pydantic==2.7.4
-pydantic-core==2.20.0
+pydantic-core==2.18.4
 pyparsing==3.1.2
 python-dotenv==1.0.1 # Redundant but safe
 requests==2.31.0 # Redundant but safe
