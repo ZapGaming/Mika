@@ -54,4 +54,4 @@ typing-extensions==4.13.0
 typing-inspect==0.9.0 # Note: If you encounter issues, double-check exact version here or update
 tqdm==4.66.4 # If this was installed, good to keep.
 urllib3==2.2.1
-yarl==1.17.9
+yarl==1.19.0
