@@ -1,54 +1,33 @@
-# Core Libraries for Discord Bot and AI Functionality
-discord.py==2.3.2
-google-generativeai==0.6.0
-python-dotenv==1.0.1
+# --- CORE BOT & AI LIBRARIES ---
+discord.py==2.3.2                     # Essential for Discord API and commands
+google-generativeai==0.6.0             # For Google Gemini AI
+python-dotenv==1.0.1                   # For securely loading environment variables from .env
 
-# Libraries for Web Scraping and Link Previews
-requests==2.31.0
-beautifulsoup4==4.12.2
-lxml==5.2.2  # Often recommended as a parser for BeautifulSoup, ensure it's installed.
+# --- WEB SCRAPING & LINK PREVIEWS ---
+requests==2.31.0                       # For making HTTP requests
+beautifulsoup4==4.12.2                 # For parsing HTML
+lxml==5.2.2                            # A fast HTML parser, especially on Linux envs.
 
-# Libraries for Image Handling (used for image dimensions)
-Pillow==10.3.0
+# --- IMAGE HANDLING ---
+Pillow==10.3.0                         # For image processing, relies on build-essential in Dockerfile.
 
-# Libraries for Spotify API Integration
-spotipy==2.25.0
+# --- SPOTIFY INTEGRATION ---
+spotipy==2.25.0                        # For interacting with the Spotify API
 
-# Common System Libraries (often pulled as dependencies, but good to be explicit)
-# These might already be covered by other installs, but explicit pinning can help avoid issues.
-aiohttp==3.12.13 # Network requests
-aiosignal==1.4.0
-annotated-types==0.7.0
-async-timeout==4.0.3
-attrs==23.2.0
-cachetools==5.3.3
-certifi==2024.6.2
-charset-normalizer==3.3.2
-frozenlist==1.4.1
+# --- ESSENTIAL GOOGLE API & CORE DEPENDENCIES ---
+# These are crucial for google-generativeai and its ecosystem to function.
+# Pip should resolve these to compatible versions.
 google-api-core==2.25.1
-google-api-python-client==2.175.0
-google-auth==2.40.0
+google-auth==2.30.0
 google-auth-httplib2==0.2.0
-googleapis-common-protos==1.70.0
+google-auth-oauthlib==1.2.0
+googleapis-common-protos==2.1.0
+# grpcio is critical and will handle its protobuf dependencies correctly.
+grpcio==1.65.1 
 grpcio-status==1.65.1
-idna==3.7
-multidict==6.0.5
-proto-plus==1.26.1
-proxy.py==2.4.8
-pyasn1==0.6.0
-pyasn1-modules==0.4.0
-pydantic==2.7.4
-pydantic-core==2.18.4
-pyparsing==3.1.2
-python-dotenv==1.0.1 # Redundant but safe
-requests==2.31.0 # Redundant but safe
-rsa==4.9
-# The google-api-python-client and related libraries might have specific pinned dependencies.
-# I've listed some common ones, but you may need to adjust these if they conflict.
-# It's generally best to generate this list *after* you've installed everything locally with pip.
+# proto-plus is important for google libraries.
+proto-plus==1.26.1                     
 
-typing-extensions==4.13.0
-typing-inspect==0.9.0 # Note: If you encounter issues, double-check exact version here or update
-tqdm==4.66.4 # If this was installed, good to keep.
-urllib3==2.2.1
-yarl==1.19.0
+# --- NETWORK UTILITIES (often needed by discord.py & others) ---
+aiohttp==3.12.13                       
+# removed typing_extensions etc. to be more bare minimum, as they are usually pulled transitively if needed.
